@@ -217,7 +217,7 @@ def search_query_body_bm25(query):
         if query_length == 1:
           tf = query.count(word) #/ query_length
           query_weights[word] = tf
-        elif idf_scores_body[word] >= 1.4:
+        elif idf_scores_body[word] >= 1.35:
           tf = query.count(word) #/ query_length
           query_weights[word] = tf
 
