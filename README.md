@@ -14,6 +14,6 @@ This repository contains four main files:
    - the implementation of the search engine. CAUTION: this file loads the indices and other large files into memory
 4. build_indices
    - a python notebook with code to show how each index was built. NOTE: the building of these indices was done on Google Cloud Platform, and the calculations were performed through Spark.
-   this notebook contains the code to build an index on the body text of wikipedia, the titles of wikipedia, the pagerank of wikipedia,
+   - this notebook contains the code to build an index on the body text of wikipedia, the titles of wikipedia, the pagerank of wikipedia,
    and (though not used in the final engine) an import of a word2vec model trained on the wikipedia corpus.
    
