@@ -39,7 +39,7 @@ storage_client = storage.Client()
 bucket = storage_client.bucket(bucket_name)
 
 # load body index
-file_path = 'postings_gcp/index.pkl'
+file_path = 'body_index_with_stem/body_index_with_stem.pkl'
 blob = bucket.blob(file_path)
 contents = blob.download_as_bytes()
 body_index = pickle.loads(contents)
@@ -57,7 +57,7 @@ contents = blob.download_as_bytes()
 doc_lengths = pickle.loads(contents)
 
 
-file_path = 'global_dics/idf_scores_body.pkl'
+file_path = 'global_dics/idf_scores_body_with_stem.pkl'
 blob = bucket.blob(file_path)
 contents = blob.download_as_bytes()
 idf_scores_body = pickle.loads(contents)
@@ -200,11 +200,11 @@ def search_query_title_bm25(query):
 
 ##### old body search
 def search_query_body_bm25(query):
-  #stemmer = PorterStemmer()
+  stemmer = PorterStemmer()
   query_weights = {}
   doc_scores = defaultdict(float)
   query = tokenize(query.lower())
-  #query = [stemmer.stem(token) for token in query]
+  query = [stemmer.stem(token) for token in query]
 
   query_length = len(query)
 
@@ -217,7 +217,7 @@ def search_query_body_bm25(query):
         if query_length == 1:
           tf = query.count(word) #/ query_length
           query_weights[word] = tf
-        elif idf_scores_body[word] >= 1.3:
+        elif idf_scores_body[word] >= 1.4:
           tf = query.count(word) #/ query_length
           query_weights[word] = tf
 
@@ -232,7 +232,7 @@ def search_query_body_bm25(query):
 
   #   for word in query_weights.keys():
   def process_word(word):
-    pl = body_index.read_a_posting_list(base_dir='postings_gcp', w=word, bucket_name='ruby_bucket_327064358')
+    pl = body_index.read_a_posting_list(base_dir='', w=word, bucket_name='ruby_bucket_327064358')
     tf_q = query_weights[word]
 
     for docid, tf in pl:
@@ -480,4 +480,3 @@ def search(query):
   ret = sorted(list(map(lambda x: (x[0], x[1] + 5*math.log(page_rank[x[0]],2) + calc_page_views(x[0])), ret)), key=lambda x: x[1], reverse=True)
   ret = list(map(lambda x: (str(x[0]), doc_title_pairs[x[0]]), ret))
   return ret
-
