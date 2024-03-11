@@ -161,7 +161,7 @@ def search_query_title_bm25(query):
         if query_length == 1:
           tf = query.count(word) #/ query_length
           query_weights[word] = tf
-        elif idf_scores_title[word] >= 1:
+        elif idf_scores_title[word] >= 1.8:
           tf = query.count(word) #/ query_length
           query_weights[word] = tf
 
@@ -194,7 +194,7 @@ def search_query_title_bm25(query):
       executor.submit(process_word, word)
 
   ret = sorted([(doc_id, score) for doc_id, score in doc_scores.items()], key=lambda x: x[1], reverse=True)[:100]
-  ret = sorted(list(map(lambda x: (x[0], x[1] + math.log(page_rank[x[0]], 10)), ret)), key=lambda x: x[1], reverse=True)
+  ret = sorted(list(map(lambda x: (x[0], x[1] + 2*math.log(page_rank[x[0]], 10)), ret)), key=lambda x: x[1], reverse=True)
   # ret = list(map(lambda x: (x[0], doc_title_pairs[x[0]]), ret))
   return ret
 
@@ -217,7 +217,7 @@ def search_query_body_bm25(query):
         if query_length == 1:
           tf = query.count(word) #/ query_length
           query_weights[word] = tf
-        elif idf_scores_body[word] >= 1:
+        elif idf_scores_body[word] >= 1.3:
           tf = query.count(word) #/ query_length
           query_weights[word] = tf
 
@@ -434,6 +434,9 @@ def search(query):
   body_scores = 0
   title_scores = 0
 
+  query_len = len(tokenize(query.lower()))
+
+
   def update_dic(scores, weight):
     for id, score in scores:
       if id in doc_scores:
@@ -462,8 +465,16 @@ def search(query):
   thread_body.join()
   thread_title.join()
 
-  update_dic(body_scores, weight=1)
-  update_dic(title_scores, weight=6)
+  if query_len <= 2:
+    update_dic(body_scores, weight=0)
+    update_dic(title_scores, weight=1)
+  elif query_len >= 5:
+    update_dic(body_scores, weight=4)
+    update_dic(title_scores, weight=1)
+  else:
+    update_dic(body_scores, weight=1)
+    update_dic(title_scores, weight=6)
+
 
   ret = sorted([(doc_id, score) for doc_id, score in doc_scores.items()], key=lambda x: x[1], reverse=True)[:100]
   ret = sorted(list(map(lambda x: (x[0], x[1] + 5*math.log(page_rank[x[0]],2) + calc_page_views(x[0])), ret)), key=lambda x: x[1], reverse=True)
