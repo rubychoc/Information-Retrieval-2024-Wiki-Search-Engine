@@ -2,7 +2,7 @@
 
 As a project, we built a search engine on the entire Wikipedia corpus. 
 
-This engine works with the BM25 similarity function and through various runtime optimizations such as threading. 
+This engine works with the BM25 similarity function and through various optimizations such as threading, stemming and query filtering.
 
 
 This repository contains four main files:
