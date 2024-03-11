@@ -102,24 +102,24 @@ contents = blob.download_as_bytes()
 page_views = pickle.loads(contents)
 
 
-# load word2vec
-file_name = "glove.6B.50d.txt"
-
-# Define the local file path where you want to download the file
-local_glove_file_path = "glove.6B.50d.txt"
-local_word2vec_file_path = "glove.6B.50d.txt"
-
-# Download the GloVe model file from GCS bucket
-blob = bucket.blob(file_name)
-blob.download_to_filename(local_glove_file_path)
-
-# Convert the GloVe model file to Word2Vec format
-glove_file = local_glove_file_path
-tmp_file = local_word2vec_file_path
-_ = glove2word2vec(glove_file, tmp_file)
-
-# Load the model using the Gensim API's load function
-model = KeyedVectors.load_word2vec_format(tmp_file)
+# # load word2vec
+# file_name = "glove.6B.50d.txt"
+#
+# # Define the local file path where you want to download the file
+# local_glove_file_path = "glove.6B.50d.txt"
+# local_word2vec_file_path = "glove.6B.50d.txt"
+#
+# # Download the GloVe model file from GCS bucket
+# blob = bucket.blob(file_name)
+# blob.download_to_filename(local_glove_file_path)
+#
+# # Convert the GloVe model file to Word2Vec format
+# glove_file = local_glove_file_path
+# tmp_file = local_word2vec_file_path
+# _ = glove2word2vec(glove_file, tmp_file)
+#
+# # Load the model using the Gensim API's load function
+# model = KeyedVectors.load_word2vec_format(tmp_file)
 
 english_stopwords = frozenset(stopwords.words('english'))
 corpus_stopwords = ["category", "references", "also", "external", "links",
@@ -143,7 +143,11 @@ doc_locks = {docid: threading.Lock() for docid in doc_lengths}
 
 
 #### old title search
-def search_query_title_bm25(query):
+def search_query_title_bm25(query, long = False):
+  if long:
+    idf_thresh = 2
+  else:
+    idf_thresh = 1.8
   stemmer = PorterStemmer()
   query_weights = {}
   doc_scores = defaultdict(float)
@@ -161,7 +165,7 @@ def search_query_title_bm25(query):
         if query_length == 1:
           tf = query.count(word) #/ query_length
           query_weights[word] = tf
-        elif idf_scores_title[word] >= 1.8:
+        elif idf_scores_title[word] >= idf_thresh:
           tf = query.count(word) #/ query_length
           query_weights[word] = tf
 
@@ -199,7 +203,11 @@ def search_query_title_bm25(query):
   return ret
 
 ##### old body search
-def search_query_body_bm25(query):
+def search_query_body_bm25(query, long = False):
+  if long:
+    idf_thresh = 1.2
+  else:
+    idf_thresh = 1.4
   stemmer = PorterStemmer()
   query_weights = {}
   doc_scores = defaultdict(float)
@@ -217,7 +225,7 @@ def search_query_body_bm25(query):
         if query_length == 1:
           tf = query.count(word) #/ query_length
           query_weights[word] = tf
-        elif idf_scores_body[word] >= 1.35:
+        elif idf_scores_body[word] >= idf_thresh:
           tf = query.count(word) #/ query_length
           query_weights[word] = tf
 
@@ -431,11 +439,20 @@ def sum_tfidf_scores(word_list):
 def search(query):
   query = query.lower()
   doc_scores = defaultdict(int)
-  body_scores = 0
-  title_scores = 0
+  body_scores = []
+  title_scores = []
 
   query_len = len(tokenize(query.lower()))
 
+  if query_len <= 2:
+    body_weight = 0
+    title_weight = 1
+  elif query_len >= 5:
+    body_weight = 4
+    title_weight = 1
+  else:
+    body_weight = 1
+    title_weight = 6
 
   def update_dic(scores, weight):
     for id, score in scores:
@@ -447,34 +464,38 @@ def search(query):
   # Function to run search_query_body in a separate thread
   def run_search_query_body():
     nonlocal body_scores
-    body_scores = search_query_body_bm25(query)
+    if query_len >= 5:
+      body_scores = search_query_body_bm25(query, long = True)
+    else:
+      body_scores = search_query_body_bm25(query, long = False)
+
 
     # Function to run search_query_title in a separate thread
 
   def run_search_query_title():
     nonlocal title_scores
-    title_scores = search_query_title_bm25(query)
+    if query_len >= 5:
+      title_scores = search_query_title_bm25(query, long = True)
+    else:
+      title_scores = search_query_title_bm25(query, long = False)
 
   # Create and start threads for search_query_body and search_query_title
-  thread_body = threading.Thread(target=run_search_query_body)
+  if query_len >= 2:
+    thread_body = threading.Thread(target=run_search_query_body)
+    thread_body.start()
+
   thread_title = threading.Thread(target=run_search_query_title)
-  thread_body.start()
   thread_title.start()
 
   # Wait for both threads to finish
-  thread_body.join()
+  if query_len >= 2:
+    thread_body.join()
   thread_title.join()
 
-  if query_len <= 2:
-    update_dic(body_scores, weight=0)
-    update_dic(title_scores, weight=1)
-  elif query_len >= 5:
-    update_dic(body_scores, weight=4)
-    update_dic(title_scores, weight=1)
-  else:
-    update_dic(body_scores, weight=1)
-    update_dic(title_scores, weight=6)
 
+  if query_len >= 2:
+    update_dic(body_scores, weight=body_weight)
+  update_dic(title_scores, weight=title_weight)
 
   ret = sorted([(doc_id, score) for doc_id, score in doc_scores.items()], key=lambda x: x[1], reverse=True)[:100]
   ret = sorted(list(map(lambda x: (x[0], x[1] + 5*math.log(page_rank[x[0]],2) + calc_page_views(x[0])), ret)), key=lambda x: x[1], reverse=True)
